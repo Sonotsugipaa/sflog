@@ -155,9 +155,11 @@ namespace sflog {
 		requires(T t) { { * std::ranges::begin(t) } -> std::convertible_to<U>; };
 
 
-	template <SinkPtrType SinkPtr>
+	template <SinkPtrType sink_ptr_tp>
 	class Logger {
 	public:
+		using SinkPtr = sink_ptr_tp;
+
 		Logger(): l_prefixSegm { 0,0,0 }, l_level(Level::eInfo), l_sgr(AnsiSgr::eNo) { }
 		Logger(SinkPtr sink, Level level, AnsiSgr sgr): l_prefixSegm { 0,0,0 }, l_sink(std::move(sink)), l_level(level), l_sgr(sgr) { }
 		Logger(const Logger&) = default;  Logger& operator=(const Logger&) = default;
