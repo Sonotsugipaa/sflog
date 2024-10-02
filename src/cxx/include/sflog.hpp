@@ -36,6 +36,9 @@ namespace sflog {
 	constexpr Level operator|(Level l, Level r) noexcept { return Level(level_e(l) | level_e(r)); }
 	constexpr bool operator<(Level l, Level r) noexcept { return level_e(l) > level_e(r); }
 
+	using ansi_sgr_e = unsigned;
+	enum class AnsiSgr { eNo = 0, eYes = 1 };
+
 	template <Level level>
 	concept RealLevel = (Level::eTrace <= level) && (level <= Level::eCritical);
 
@@ -155,12 +158,36 @@ namespace sflog {
 	template <SinkPtrType SinkPtr>
 	class Logger {
 	public:
+		Logger(): l_prefixSegm { 0,0,0 }, l_level(Level::eInfo), l_sgr(AnsiSgr::eNo) { }
+		Logger(SinkPtr sink, Level level, AnsiSgr sgr): l_prefixSegm { 0,0,0 }, l_sink(std::move(sink)), l_level(level), l_sgr(sgr) { }
+		Logger(const Logger&) = default;  Logger& operator=(const Logger&) = default;
+		Logger(Logger&&)      = default;  Logger& operator=(Logger&&)      = default;
+
+		template <StringLike<char> Str0, StringLike<char> Str1>
+		Logger(
+			SinkPtr sink, Level level, AnsiSgr sgr,
+			const Str0& pfxBeforeLevelColor, const Str1& pfxAfterLevelColor
+		):
+			Logger(std::move(sink), level, sgr)
+		{
+			setPrefix(pfxBeforeLevelColor, pfxAfterLevelColor);
+		}
+
+		template <StringLike<char> Str0, StringLike<char> Str1, StringLike<char> Str2, StringLike<char> Str3>
+		Logger(
+			SinkPtr sink, Level level, AnsiSgr sgr,
+			const Str0& pfxBeforeLevelColor, const Str1& pfxBeforeLevel, const Str2& pfxAfterLevel, const Str3& pfxAfterLevelColor
+		):
+			Logger(std::move(sink), level, sgr)
+		{
+			setPrefix(pfxBeforeLevelColor, pfxBeforeLevel, pfxAfterLevel, pfxAfterLevelColor);
+		}
+
 		template <Level level, typename... Args> requires RealLevel<level>
 		void logRaw(fmt::format_string<Args...> fmtStr, Args... args) {
 			auto& ref = *l_sink;
-			auto pfx0 = std::string_view(l_prefix.begin(),                   l_prefix.begin() + l_prefixSegm[0]);
-			auto pfx1 = std::string_view(l_prefix.begin() + l_prefixSegm[2], l_prefix.end()                    );
-			formatTo(ref, "{}{}{}", pfx0, levelStr<level>, pfx1);
+			auto pfx = getPrefixSegments();
+			formatTo(ref, "{}{}{}", std::get<0>(pfx), levelStr<level>, std::get<3>(pfx));
 			formatTo(ref, fmtStr, std::forward<Args>(args)...);
 			formatTo(ref, "\n");
 		}
@@ -168,11 +195,8 @@ namespace sflog {
 		template <Level level, typename... Args> requires RealLevel<level>
 		void logFormatted(fmt::format_string<Args...> fmtStr, Args... args) {
 			auto& ref = *l_sink;
-			auto pfx0 = std::string_view(l_prefix.begin(),                   l_prefix.begin() + l_prefixSegm[0]);
-			auto pfx1 = std::string_view(l_prefix.begin() + l_prefixSegm[0], l_prefix.begin() + l_prefixSegm[1]);
-			auto pfx2 = std::string_view(l_prefix.begin() + l_prefixSegm[1], l_prefix.begin() + l_prefixSegm[2]);
-			auto pfx3 = std::string_view(l_prefix.begin() + l_prefixSegm[2], l_prefix.end()                    );
-			formatTo(ref, "{}{}{}{}{}{}{}", pfx0, levelAnsiSgrView<level>, pfx1, levelStr<level>, pfx2, ansiResetSgrView, pfx3);
+			auto pfx = getPrefixSegments();
+			formatTo(ref, "{}{}{}{}{}{}{}", std::get<0>(pfx), levelAnsiSgrView<level>, std::get<1>(pfx), levelStr<level>, std::get<2>(pfx), ansiResetSgrView, std::get<3>(pfx));
 			formatTo(ref, fmtStr, std::forward<Args>(args)...);
 			formatTo(ref, "\n");
 		}
@@ -180,14 +204,16 @@ namespace sflog {
 		template <Level level, typename... Args> requires RealLevel<level>
 		void log(fmt::format_string<Args...> fmtStr, Args... args) {
 			// Optimize for level > eDebug
-			#define LOG_ if(l_sgr) logFormatted<level, Args...>(fmtStr, std::forward<Args>(args)...); else logRaw<level, Args...>(fmtStr, std::forward<Args>(args)...);
+			#define LOG_ \
+				if(l_sgr == AnsiSgr::eYes) logFormatted<level, Args...>(fmtStr, args...); \
+				else                       logRaw      <level, Args...>(fmtStr, args...);
 			if constexpr (level <= Level::eDebug) { if(level >= l_level) [[unlikely]] { LOG_ }; }
 			if constexpr (level >  Level::eDebug) { if(level >= l_level) [[  likely]] { LOG_ }; }
 			#undef LOG_
 		}
 
 		#define LOG_ALIAS_SIG_(UC_, LC_, REST_) template <typename... Args> void LC_##REST_(fmt::format_string<Args...> fmtStr, Args... args)
-		#define LOG_ALIAS_BODY_(UC_, LC_, REST_) log<Level::e##UC_##REST_, Args...>(fmtStr, std::forward<Args>(args)...);
+		#define LOG_ALIAS_BODY_(UC_, LC_, REST_) log<Level::e##UC_##REST_, Args...>(fmtStr, args...);
 		#define LOG_ALIAS_(UC_, LC_, REST_) LOG_ALIAS_SIG_(UC_, LC_, REST_) { LOG_ALIAS_BODY_(UC_, LC_, REST_) }
 		LOG_ALIAS_(T,t,race)
 		LOG_ALIAS_(D,d,ebug)
@@ -199,12 +225,8 @@ namespace sflog {
 		#undef LOG_ALIAS_BODY_
 		#undef LOG_ALIAS_SIG_
 
-		template <
-			StringLike<char> Str0,
-			StringLike<char> Str1,
-			StringLike<char> Str2,
-			StringLike<char> Str3 >
-		void setPrefix(const Str0& beforeLevelColor, const Str1& beforeLevel, const Str2& afterLevel, const Str3& afterLevelColor) {
+		template <StringLike<char> Str0, StringLike<char> Str1, StringLike<char> Str2, StringLike<char> Str3>
+		auto& setPrefix(const Str0& beforeLevelColor, const Str1& beforeLevel, const Str2& afterLevel, const Str3& afterLevelColor) {
 			using std::ranges::size;
 			using std::ranges::begin;
 			using std::ranges::end;
@@ -213,20 +235,36 @@ namespace sflog {
 			l_prefix.append(begin(beforeLevel     ), end(beforeLevel     )); l_prefixSegm[1] = l_prefix.size();
 			l_prefix.append(begin(afterLevel      ), end(afterLevel      )); l_prefixSegm[2] = l_prefix.size();
 			l_prefix.append(begin(afterLevelColor ), end(afterLevelColor ));
+			return *this;
 		}
 
 		template <StringLike<char> Str0, StringLike<char> Str1>
-		void setPrefix(Str0& beforeLevelColor, Str1& afterLevelColor) {
+		auto& setPrefix(Str0& beforeLevelColor, Str1& afterLevelColor) {
 			using namespace std::string_view_literals;
-			setPrefix(beforeLevelColor, ""sv, ""sv, afterLevelColor);
+			return setPrefix(beforeLevelColor, ""sv, ""sv, afterLevelColor);
 		}
+
+		auto getPrefix() const noexcept { return std::string_view(l_prefix); }
+		auto getPrefixSegments() const noexcept { return std::tuple(
+			std::string_view(l_prefix.begin()                  , l_prefix.begin() + l_prefixSegm[0]),
+			std::string_view(l_prefix.begin() + l_prefixSegm[0], l_prefix.begin() + l_prefixSegm[1]),
+			std::string_view(l_prefix.begin() + l_prefixSegm[1], l_prefix.begin() + l_prefixSegm[2]),
+			std::string_view(l_prefix.begin() + l_prefixSegm[2], l_prefix.end()                    ) ); }
+
+		auto  usingAnsiSgr() const noexcept { return l_sgr; }
+		auto& useAnsiSgr(AnsiSgr v = AnsiSgr::eYes) noexcept { l_sgr = v; }
+
+		auto& sink(this auto& self) noexcept { return self.l_sink; }
+
+		void  setLevel(Level v) noexcept { l_level = v; }
+		Level getLevel() const noexcept { return l_level; }
 
 	private:
 		std::string l_prefix;
 		size_t      l_prefixSegm[3];
 		SinkPtr     l_sink;
 		Level       l_level;
-		bool        l_sgr;
+		AnsiSgr     l_sgr;
 	};
 
 }
