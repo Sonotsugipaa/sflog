@@ -1,0 +1,10 @@
+{
+	"C_Cpp.intelliSenseEngineFallback": "disabled",
+	"C_Cpp.default.cppStandard": "c++23",
+	"C_Cpp.default.defines": [
+		"SFLOG_ENABLE_POSIXFIO"
+	],
+	"C_Cpp.default.includePath": [
+		"src/cxx/include"
+	]
+}
