@@ -124,13 +124,13 @@ namespace sflog {
 	concept StdOstreamType = StdOstreamPtrType<T*> && ! StdOstreamPtrType<T>;
 
 	template <StdOstreamType StdOstream, typename... Args>
-	void formatTo(StdOstream& ostr, fmt::format_string<Args...> fmtStr, Args... args) {
+	void formatTo(StdOstream& ostr, fmt::format_string<Args...> fmtStr, Args&&... args) {
 		auto ins = std::ostream_iterator<typename StdOstream::char_type>(ostr);
 		fmt::format_to(ins, fmtStr, std::forward<Args>(args)...);
 	}
 
 	template <StdOstreamPtrType StdOstreamPtr, typename... Args>
-	void formatTo(StdOstreamPtr ostr, fmt::format_string<Args...> fmtStr, Args... args) {
+	void formatTo(StdOstreamPtr ostr, fmt::format_string<Args...> fmtStr, Args&&... args) {
 		formatTo(*ostr, fmtStr, std::forward<Args>(args)...);
 	}
 
@@ -186,7 +186,7 @@ namespace sflog {
 		}
 
 		template <Level level, typename... Args> requires RealLevel<level>
-		void logRaw(fmt::format_string<Args...> fmtStr, Args... args) {
+		void logRaw(fmt::format_string<Args...> fmtStr, Args&&... args) {
 			auto& ref = *l_sink;
 			auto pfx = getPrefixSegments();
 			formatTo(ref, "{}{}{}", std::get<0>(pfx), levelStr<level>, std::get<3>(pfx));
@@ -195,7 +195,7 @@ namespace sflog {
 		}
 
 		template <Level level, typename... Args> requires RealLevel<level>
-		void logFormatted(fmt::format_string<Args...> fmtStr, Args... args) {
+		void logFormatted(fmt::format_string<Args...> fmtStr, Args&&... args) {
 			auto& ref = *l_sink;
 			auto pfx = getPrefixSegments();
 			formatTo(ref, "{}{}{}{}{}{}{}", std::get<0>(pfx), levelAnsiSgrView<level>, std::get<1>(pfx), levelStr<level>, std::get<2>(pfx), ansiResetSgrView, std::get<3>(pfx));
@@ -204,18 +204,18 @@ namespace sflog {
 		}
 
 		template <Level level, typename... Args> requires RealLevel<level>
-		void log(fmt::format_string<Args...> fmtStr, Args... args) {
+		void log(fmt::format_string<Args...> fmtStr, Args&&... args) {
 			// Optimize for level > eDebug
 			#define LOG_ \
-				if(l_sgr == AnsiSgr::eYes) logFormatted<level, Args...>(fmtStr, args...); \
-				else                       logRaw      <level, Args...>(fmtStr, args...);
+				if(l_sgr == AnsiSgr::eYes) logFormatted<level, Args...>(fmtStr, std::forward<Args>(args)...); \
+				else                       logRaw      <level, Args...>(fmtStr, std::forward<Args>(args)...);
 			if constexpr (level <= Level::eDebug) { if(level >= l_level) [[unlikely]] { LOG_ }; }
 			if constexpr (level >  Level::eDebug) { if(level >= l_level) [[  likely]] { LOG_ }; }
 			#undef LOG_
 		}
 
 		#define LOG_ALIAS_SIG_(UC_, LC_, REST_) template <typename... Args> void LC_##REST_(fmt::format_string<Args...> fmtStr, Args... args)
-		#define LOG_ALIAS_BODY_(UC_, LC_, REST_) log<Level::e##UC_##REST_, Args...>(fmtStr, args...);
+		#define LOG_ALIAS_BODY_(UC_, LC_, REST_) log<Level::e##UC_##REST_, Args...>(fmtStr, std::forward<Args>(args)...);
 		#define LOG_ALIAS_(UC_, LC_, REST_) LOG_ALIAS_SIG_(UC_, LC_, REST_) { LOG_ALIAS_BODY_(UC_, LC_, REST_) }
 		LOG_ALIAS_(T,t,race)
 		LOG_ALIAS_(D,d,ebug)

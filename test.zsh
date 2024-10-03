@@ -30,4 +30,4 @@ cd "$dstpath/$config"
 
 cmake -DCMAKE_BUILD_TYPE=$config -DSFLOG_BUILD_TEST=1 $srcpath -G $generator
 cmake --build "." --config $config
-cxx/sflog_test
+valgrind --leak-check=full --show-leak-kinds=all cxx/sflog_test
