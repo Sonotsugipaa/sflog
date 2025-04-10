@@ -116,13 +116,13 @@ namespace sflog {
 		};
 
 		template <typename... Args>
-		void formatTo(posixfio::FileView file, fmt::format_string<Args...> fmtStr, Args... args) {
+		void formatTo(posixfio::FileView file, fmt::format_string<Args...> fmtStr, Args&&... args) {
 			PosixfioInserter<posixfio::FileView> ins = { file };
 			fmt::format_to(ins, fmtStr, std::forward<Args>(args)...);
 		}
 
 		template <PosixfioOutputBufferType BufferType, typename... Args>
-		void formatTo(BufferType& buffer, fmt::format_string<Args...> fmtStr, Args... args) {
+		void formatTo(BufferType& buffer, fmt::format_string<Args...> fmtStr, Args&&... args) {
 			PosixfioInserter<BufferType> ins = { buffer };
 			fmt::format_to(ins, fmtStr, std::forward<Args>(args)...);
 		}
@@ -210,7 +210,7 @@ namespace sflog {
 		}
 
 
-		#define LOG_ALIAS_SIG_(UC_, LC_, REST_) template <typename... Args> void LC_##REST_(fmt::format_string<Args...> fmtStr, Args... args)
+		#define LOG_ALIAS_SIG_(UC_, LC_, REST_) template <typename... Args> void LC_##REST_(fmt::format_string<Args...> fmtStr, Args&&... args)
 		#define LOG_ALIAS_BODY_(UC_, LC_, REST_) l_log<Level::e##UC_##REST_, Args...>(fmtStr, std::forward<Args>(args)...);
 		#define LOG_ALIAS_(UC_, LC_, REST_) LOG_ALIAS_SIG_(UC_, LC_, REST_) { LOG_ALIAS_BODY_(UC_, LC_, REST_) }
 		LOG_ALIAS_(T,t,race)
