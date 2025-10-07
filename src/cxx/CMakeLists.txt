@@ -15,11 +15,9 @@ endif()
 
 
 
-find_package(fmt)
 find_package(posixfio)
 
 add_library(sflog INTERFACE)
-add_dependencies(sflog fmt)
 target_include_directories(sflog INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_precompile_headers(sflog INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include/sflog.hpp")
 
@@ -29,5 +27,5 @@ endif(posixfio_FOUND)
 
 if(SFLOG_BUILD_TEST)
 	add_executable(sflog_test test.cpp)
-	target_link_libraries(sflog_test sflog posixfio fmt)
+	target_link_libraries(sflog_test sflog posixfio)
 endif(SFLOG_BUILD_TEST)

@@ -1,7 +1,5 @@
 #pragma once
 
-#include <fmt/format.h>
-
 #include <string>
 #include <memory>
 #include <ostream>
@@ -116,15 +114,15 @@ namespace sflog {
 		};
 
 		template <typename... Args>
-		void formatTo(posixfio::FileView file, fmt::format_string<Args...> fmtStr, Args&&... args) {
+		void formatTo(posixfio::FileView file, std::format_string<Args...> fmtStr, Args&&... args) {
 			PosixfioInserter<posixfio::FileView> ins = { file };
-			fmt::format_to(ins, fmtStr, std::forward<Args>(args)...);
+			std::format_to(ins, fmtStr, std::forward<Args>(args)...);
 		}
 
 		template <PosixfioOutputBufferType BufferType, typename... Args>
-		void formatTo(BufferType& buffer, fmt::format_string<Args...> fmtStr, Args&&... args) {
+		void formatTo(BufferType& buffer, std::format_string<Args...> fmtStr, Args&&... args) {
 			PosixfioInserter<BufferType> ins = { buffer };
-			fmt::format_to(ins, fmtStr, std::forward<Args>(args)...);
+			std::format_to(ins, fmtStr, std::forward<Args>(args)...);
 		}
 
 		inline void flush(posixfio::FileView) { }
@@ -147,13 +145,13 @@ namespace sflog {
 	concept StdOstreamType = StdOstreamPtrType<T*> && ! StdOstreamPtrType<T>;
 
 	template <StdOstreamType StdOstream, typename... Args>
-	void formatTo(StdOstream& ostr, fmt::format_string<Args...> fmtStr, Args&&... args) {
+	void formatTo(StdOstream& ostr, std::format_string<Args...> fmtStr, Args&&... args) {
 		auto ins = std::ostream_iterator<typename StdOstream::char_type>(ostr);
-		fmt::format_to(ins, fmtStr, std::forward<Args>(args)...);
+		std::format_to(ins, fmtStr, std::forward<Args>(args)...);
 	}
 
 	template <StdOstreamPtrType StdOstreamPtr, typename... Args>
-	void formatTo(StdOstreamPtr ostr, fmt::format_string<Args...> fmtStr, Args&&... args) {
+	void formatTo(StdOstreamPtr ostr, std::format_string<Args...> fmtStr, Args&&... args) {
 		formatTo(*ostr, fmtStr, std::forward<Args>(args)...);
 	}
 
@@ -210,7 +208,7 @@ namespace sflog {
 		}
 
 
-		#define LOG_ALIAS_SIG_(UC_, LC_, REST_) template <typename... Args> void LC_##REST_(fmt::format_string<Args...> fmtStr, Args&&... args)
+		#define LOG_ALIAS_SIG_(UC_, LC_, REST_) template <typename... Args> void LC_##REST_(std::format_string<Args...> fmtStr, Args&&... args)
 		#define LOG_ALIAS_BODY_(UC_, LC_, REST_) l_log<Level::e##UC_##REST_, Args...>(fmtStr, std::forward<Args>(args)...);
 		#define LOG_ALIAS_(UC_, LC_, REST_) LOG_ALIAS_SIG_(UC_, LC_, REST_) { LOG_ALIAS_BODY_(UC_, LC_, REST_) }
 		LOG_ALIAS_(T,t,race)
@@ -267,7 +265,7 @@ namespace sflog {
 
 	private:
 		template <Level level, typename... Args> requires RealLevel<level>
-		void l_logRaw(fmt::format_string<Args...> fmtStr, Args&&... args) {
+		void l_logRaw(std::format_string<Args...> fmtStr, Args&&... args) {
 			auto& ref = *l_sink;
 			auto pfx = getPrefixSegments();
 			formatTo(ref, "{}{}{}", std::get<0>(pfx), levelStr<level>, std::get<3>(pfx));
@@ -278,7 +276,7 @@ namespace sflog {
 
 
 		template <Level level, typename... Args> requires RealLevel<level>
-		void l_logFormatted(fmt::format_string<Args...> fmtStr, Args&&... args) {
+		void l_logFormatted(std::format_string<Args...> fmtStr, Args&&... args) {
 			auto& ref = *l_sink;
 			auto pfx = getPrefixSegments();
 			formatTo(ref, "{}{}{}{}{}{}{}", std::get<0>(pfx), levelAnsiSgrView<level>, std::get<1>(pfx), levelStr<level>, std::get<2>(pfx), ansiResetSgrView, std::get<3>(pfx));
@@ -289,7 +287,7 @@ namespace sflog {
 
 
 		template <Level level, typename... Args> requires RealLevel<level>
-		void l_log(fmt::format_string<Args...> fmtStr, Args&&... args) {
+		void l_log(std::format_string<Args...> fmtStr, Args&&... args) {
 			// Optimize for level > eDebug:
 			// debugging is always marginally slower, but perfectly up-to-code
 			// release builds shouldn't print debugging logs to begin with.
